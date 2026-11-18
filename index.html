@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pomodoro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pomodoro">
+<style>
+  /* Plain ES5 / CSS with -webkit- fallbacks so it runs on iPad 2 (iOS 9 Safari). */
+  * { -webkit-box-sizing: border-box; box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #faf6f0; }
+  body {
+    font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #3a2e2a;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+  }
+  button { font-family: inherit; -webkit-appearance: none; appearance: none; outline: none; cursor: pointer; }
+
+  #stage {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-flex-direction: column; flex-direction: column;
+    -webkit-align-items: center; align-items: center;
+    -webkit-justify-content: center; justify-content: center;
+    padding: 4vmin;
+  }
+
+  #ringWrap { width: 54vmin; height: 54vmin; -webkit-flex: none; flex: none; }
+  #ring { width: 100%; height: 100%; display: block; }
+  #prog { stroke: #e8553f; -webkit-transition: stroke-dashoffset 0.5s linear; transition: stroke-dashoffset 0.5s linear; }
+  body.short #prog { stroke: #5fae6a; }
+  body.long #prog { stroke: #5b9bd5; }
+
+  #panel { text-align: center; margin-top: 2vmin; display: -webkit-box; display: -webkit-flex; display: flex;
+    -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: center; align-items: center; }
+
+  /* Mode tabs */
+  #tabs { display: -webkit-box; display: -webkit-flex; display: flex; background: #efe6da; border-radius: 4vmin; padding: 0.6vmin; }
+  .tab {
+    height: 6vmin; padding: 0 3vmin; border: none; background: transparent; border-radius: 3.4vmin;
+    font-size: 2.5vmin; font-weight: 600; color: #8a7a6e;
+  }
+  .tab.on { background: #fff; color: #e8553f; -webkit-box-shadow: 0 0.3vmin 1vmin rgba(90,60,40,0.18); box-shadow: 0 0.3vmin 1vmin rgba(90,60,40,0.18); }
+  body.short .tab.on { color: #4a9a56; }
+  body.long .tab.on { color: #4a88c2; }
+
+  /* Time */
+  #time { margin-top: 1.6vmin; font-family: "Arial Rounded MT Bold", "Avenir Next", "Helvetica Neue", Arial, sans-serif; font-size: 20vmin; line-height: 1.05; color: #3a2e2a; }
+  #time .d { display: inline-block; width: 0.62em; text-align: center; }
+  #time .c { display: inline-block; width: 0.3em; text-align: center; position: relative; top: -0.04em; color: #d9cbbd; }
+  #msg { margin-top: 0.4vmin; font-size: 2.7vmin; color: #9a8a7d; height: 3.6vmin; }
+
+  /* Controls */
+  #controls { margin-top: 2.4vmin; display: -webkit-box; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+  .round {
+    width: 9vmin; height: 9vmin; border-radius: 50%; border: 0.35vmin solid #e3d6c8; background: #fff; color: #8a7a6e;
+    display: -webkit-box; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center;
+    padding: 0;
+  }
+  .round svg { width: 4.4vmin; height: 4.4vmin; }
+  #bStart {
+    height: 10.4vmin; min-width: 30vmin; margin: 0 3vmin; padding: 0 4vmin; border: none; border-radius: 5.2vmin;
+    background: #e8553f; color: #fff; font-size: 3.6vmin; font-weight: 700; letter-spacing: 0.2vmin;
+    -webkit-box-shadow: 0 0.8vmin 2vmin rgba(232,85,63,0.35); box-shadow: 0 0.8vmin 2vmin rgba(232,85,63,0.35);
+  }
+  body.short #bStart { background: #5fae6a; -webkit-box-shadow: 0 0.8vmin 2vmin rgba(95,174,106,0.35); box-shadow: 0 0.8vmin 2vmin rgba(95,174,106,0.35); }
+  body.long #bStart { background: #5b9bd5; -webkit-box-shadow: 0 0.8vmin 2vmin rgba(91,155,213,0.35); box-shadow: 0 0.8vmin 2vmin rgba(91,155,213,0.35); }
+
+  /* Progress dots + footer */
+  #dots { margin-top: 2.6vmin; display: -webkit-box; display: -webkit-flex; display: flex; }
+  .dot { width: 2.8vmin; height: 2.8vmin; margin: 0 0.9vmin; border-radius: 50%; background: #eadfd3; border: 0.4vmin solid #eadfd3; }
+  .dot.done { background: #e8553f; border-color: #e8553f; }
+  .dot.cur { background: transparent; border-color: #e8553f; }
+  #today { margin-top: 1.2vmin; font-size: 2.3vmin; color: #9a8a7d; }
+  #today b { color: #e8553f; }
+  #bSet { margin-top: 1.2vmin; height: 5vmin; padding: 0 2.6vmin; border: none; background: transparent; font-size: 2.3vmin; color: #9a8a7d; text-decoration: underline; }
+
+  /* Settings sheet */
+  #sheetBg {
+    display: none; position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    background: rgba(58,46,42,0.4);
+    -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center;
+  }
+  #sheetBg.open { display: -webkit-box; display: -webkit-flex; display: flex; }
+  #sheet { width: 74vmin; background: #fff; border-radius: 3.4vmin; padding: 3vmin 4vmin 3.4vmin; -webkit-box-shadow: 0 2vmin 6vmin rgba(0,0,0,0.35); box-shadow: 0 2vmin 6vmin rgba(0,0,0,0.35); }
+  #sheet h2 { font-size: 3.6vmin; font-weight: 700; text-align: center; margin-bottom: 1vmin; }
+  .row { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: space-between; justify-content: space-between;
+    height: 8.6vmin; border-bottom: 0.25vmin solid #f1e9df; font-size: 3vmin; }
+  .ctl { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+  .sb { width: 6.4vmin; height: 6.4vmin; border-radius: 50%; border: 0.3vmin solid #e3d6c8; background: #fff; color: #e8553f; font-size: 3.8vmin; font-weight: 700; line-height: 1; padding: 0; }
+  .val { min-width: 15vmin; text-align: center; font-weight: 700; }
+  .sw { width: 11.4vmin; height: 6.4vmin; border-radius: 3.2vmin; border: none; background: #e3d6c8; position: relative; padding: 0; -webkit-transition: background 0.2s; transition: background 0.2s; }
+  .sw:after { content: ""; position: absolute; left: 0.6vmin; top: 0.6vmin; width: 5.2vmin; height: 5.2vmin; border-radius: 50%; background: #fff;
+    -webkit-transition: -webkit-transform 0.2s; transition: transform 0.2s; -webkit-box-shadow: 0 0.2vmin 0.6vmin rgba(0,0,0,0.25); box-shadow: 0 0.2vmin 0.6vmin rgba(0,0,0,0.25); }
+  .sw.on { background: #5fae6a; }
+  .sw.on:after { -webkit-transform: translateX(5vmin); transform: translateX(5vmin); }
+  #bDone { margin-top: 2.6vmin; width: 100%; height: 8.6vmin; border: none; border-radius: 4.3vmin; background: #e8553f; color: #fff; font-size: 3.2vmin; font-weight: 700; }
+
+  #flash { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: rgba(232,85,63,0.3); opacity: 0; pointer-events: none; }
+  #flash.go { -webkit-animation: flash 0.7s ease-in-out 4; animation: flash 0.7s ease-in-out 4; }
+  @-webkit-keyframes flash { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+  @keyframes flash { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+
+  /* Corner light/dark button */
+  #bMode { position: absolute; right: 4vmin; top: 4vmin; z-index: 2; }
+  #bMode .sunIcon { display: none; }
+  body.dark #bMode .sunIcon { display: block; }
+  body.dark #bMode .moonIcon { display: none; }
+
+  /* Dark mode */
+  body.dark, html.dark { background: #1d1815; }
+  body.dark { color: #f3e9e0; }
+  body.dark #track { stroke: #3a312b; }
+  body.dark #tabs { background: #2b241f; }
+  body.dark .tab { color: #a89888; }
+  body.dark .tab.on { background: #3d342d; color: #ff7a66; -webkit-box-shadow: none; box-shadow: none; }
+  body.dark.short .tab.on { color: #7cc886; }
+  body.dark.long .tab.on { color: #7db4e6; }
+  body.dark #time { color: #f6ece3; }
+  body.dark #time .c { color: #5a4d44; }
+  body.dark #msg, body.dark #today, body.dark #bSet { color: #a8978a; }
+  body.dark .round { background: #2b241f; border-color: #4a3f37; color: #c9b8aa; }
+  body.dark .dot { background: #3a312b; border-color: #3a312b; }
+  body.dark .dot.done { background: #e8553f; border-color: #e8553f; }
+  body.dark .dot.cur { background: transparent; border-color: #e8553f; }
+  body.dark #sheetBg { background: rgba(0,0,0,0.6); }
+  body.dark #sheet { background: #2b241f; }
+  body.dark .row { border-bottom-color: #3a312b; }
+  body.dark .sb { background: #1d1815; border-color: #4a3f37; }
+  body.dark .sw { background: #4a3f37; }
+  body.dark .sw.on { background: #5fae6a; }
+  body.dark #flash { background: rgba(232,85,63,0.35); }
+
+  /* Landscape: tomato on the left, controls on the right */
+  @media (orientation: landscape) {
+    #stage { -webkit-flex-direction: row; flex-direction: row; padding: 4vmin 6vmin; }
+    #ringWrap { width: 74vmin; height: 74vmin; }
+    #panel { margin-top: 0; margin-left: 7vmin; width: 52vmin; }
+    #time { font-size: 17vmin; }
+    #sheet { width: 62vmin; }
+  }
+</style>
+</head>
+<body class="focus">
+<div id="stage">
+  <div id="ringWrap"><svg id="ring" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+  <div id="panel">
+    <div id="tabs">
+      <button class="tab on" type="button" data-m="focus">Focus</button>
+      <button class="tab" type="button" data-m="short">Short break</button>
+      <button class="tab" type="button" data-m="long">Long break</button>
+    </div>
+    <div id="time"><span class="d" id="m1">2</span><span class="d" id="m2">5</span><span class="c">:</span><span class="d" id="s1">0</span><span class="d" id="s2">0</span></div>
+    <div id="msg"></div>
+    <div id="controls">
+      <button class="round" id="bReset" type="button" aria-label="Reset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4 3.8v4.6h4.6"/></svg></button>
+      <button id="bStart" type="button">Start</button>
+      <button class="round" id="bSkip" type="button" aria-label="Skip"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5.5l10 6.5-10 6.5z"/><rect x="17" y="5" width="2.6" height="14" rx="1.1"/></svg></button>
+    </div>
+    <div id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div id="today"></div>
+    <button id="bSet" type="button">Settings</button>
+  </div>
+</div>
+
+<button class="round" id="bMode" type="button" aria-label="Switch light or dark mode">
+  <svg class="moonIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.2A8.6 8.6 0 0 1 9.8 3.5a8.6 8.6 0 1 0 10.7 10.7z"/></svg>
+  <svg class="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.3M12 19.2v2.3M2.5 12h2.3M19.2 12h2.3M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/></svg>
+</button>
+
+<div id="sheetBg">
+  <div id="sheet">
+    <h2>Settings</h2>
+    <div class="row"><span>Focus</span><div class="ctl"><button class="sb" type="button" data-k="focus" data-d="-1">&minus;</button><span class="val" id="v_focus">25 min</span><button class="sb" type="button" data-k="focus" data-d="1">+</button></div></div>
+    <div class="row"><span>Short break</span><div class="ctl"><button class="sb" type="button" data-k="short" data-d="-1">&minus;</button><span class="val" id="v_short">5 min</span><button class="sb" type="button" data-k="short" data-d="1">+</button></div></div>
+    <div class="row"><span>Long break</span><div class="ctl"><button class="sb" type="button" data-k="long" data-d="-1">&minus;</button><span class="val" id="v_long">15 min</span><button class="sb" type="button" data-k="long" data-d="1">+</button></div></div>
+    <div class="row"><span>Chime</span><button class="sw on" id="tSound" type="button" aria-label="Chime"></button></div>
+    <div class="row"><span>Auto-start next</span><button class="sw" id="tAuto" type="button" aria-label="Auto-start"></button></div>
+    <div class="row"><span>Dark mode</span><button class="sw" id="tDark" type="button" aria-label="Dark mode"></button></div>
+    <button id="bDone" type="button">Done</button>
+  </div>
+</div>
+<div id="flash"></div>
+
+<script>
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(parent, name, attrs) {
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) { if (attrs.hasOwnProperty(k)) { e.setAttribute(k, attrs[k]); } }
+    parent.appendChild(e);
+    return e;
+  }
+  function $(id) { return document.getElementById(id); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  var i, k;
+
+  /* ===== Ring + tomato ===== */
+  var ring = $('ring');
+  var defs = el(ring, 'defs', {});
+  var grad = el(defs, 'radialGradient', { id: 'tg', cx: '0.35', cy: '0.3', r: '0.85' });
+  el(grad, 'stop', { offset: '0', 'stop-color': '#ff7d66' });
+  el(grad, 'stop', { offset: '0.6', 'stop-color': '#ea5540' });
+  el(grad, 'stop', { offset: '1', 'stop-color': '#cf3e2b' });
+  var R = 140, C = 2 * Math.PI * R;
+  el(ring, 'circle', { id: 'track', cx: 150, cy: 150, r: R, fill: 'none', stroke: '#eadfd3', 'stroke-width': 9 });
+  var prog = el(ring, 'circle', { id: 'prog', cx: 150, cy: 150, r: R, fill: 'none', 'stroke-width': 9, 'stroke-linecap': 'round',
+    'stroke-dasharray': C.toFixed(2) + ' ' + C.toFixed(2), transform: 'rotate(-90 150 150)' });
+  prog.style.strokeDashoffset = '0';
+  var tg = el(ring, 'g', {});
+
+  var INK = '#3a2420';
+  var eyes = [];          /* eye ellipses + glints, for blinking */
+  var tomatoKey = '';
+  function stroke(parent, d, w) {
+    return el(parent, 'path', { d: d, fill: 'none', stroke: INK, 'stroke-width': w || 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+  }
+  function eye(cx, cy) {
+    var e = el(tg, 'ellipse', { cx: cx, cy: cy, rx: 9, ry: 11, fill: INK });
+    var gl = el(tg, 'circle', { cx: cx - 3, cy: cy - 4, r: 3.4, fill: '#fff' });
+    eyes.push({ e: e, g: gl });
+  }
+  var spark = 'M0 -9 Q0 0 9 0 Q0 0 0 9 Q0 0 -9 0 Q0 0 0 -9 Z';
+  function drawTomato(state) {
+    while (tg.firstChild) { tg.removeChild(tg.firstChild); }
+    eyes = [];
+    el(tg, 'ellipse', { cx: 150, cy: 252, rx: 78, ry: 7, fill: dark ? '#000' : '#3a2e2a', 'fill-opacity': dark ? 0.35 : 0.07 });
+    el(tg, 'ellipse', { cx: 150, cy: 162, rx: 98, ry: 90, fill: 'url(#tg)' });
+    el(tg, 'ellipse', { cx: 100, cy: 112, rx: 22, ry: 11, fill: '#fff', 'fill-opacity': 0.3, transform: 'rotate(-35 100 112)' });
+    /* leaves + stem */
+    el(tg, 'path', { d: 'M150 92 L122 76 L130 98 L102 102 L128 115 L150 128 L172 115 L198 102 L170 98 L178 76 Z', fill: '#6bb36b' });
+    el(tg, 'path', { d: 'M150 100 L138 92 L142 104 L150 110 L158 104 L162 92 Z', fill: '#58a05a' });
+    el(tg, 'rect', { x: 146, y: 58, width: 8, height: 30, rx: 4, fill: '#58a05a' });
+    /* cheeks */
+    el(tg, 'ellipse', { cx: 96, cy: 192, rx: 14, ry: 8.5, fill: '#ff9aa2', 'fill-opacity': 0.75 });
+    el(tg, 'ellipse', { cx: 204, cy: 192, rx: 14, ry: 8.5, fill: '#ff9aa2', 'fill-opacity': 0.75 });
+    if (state === 'focus') {
+      stroke(tg, 'M100 150 L128 160', 4.5);
+      stroke(tg, 'M200 150 L172 160', 4.5);
+      eye(116, 174); eye(184, 174);
+      stroke(tg, 'M138 196 Q150 202 162 196');
+    } else if (state === 'break') {
+      stroke(tg, 'M104 176 Q116 160 128 176');
+      stroke(tg, 'M172 176 Q184 160 196 176');
+      el(tg, 'path', { d: 'M132 190 Q150 222 168 190 Z', fill: INK });
+      el(tg, 'ellipse', { cx: 150, cy: 205, rx: 8, ry: 5, fill: '#ff8a8a' });
+      var sps = [[64, 104, 1], [238, 112, 1.2], [232, 220, 0.8]];
+      for (var q = 0; q < sps.length; q++) {
+        var s = el(tg, 'path', { d: spark, fill: '#f6b93b' });
+        s.setAttribute('transform', 'translate(' + sps[q][0] + ' ' + sps[q][1] + ') scale(' + sps[q][2] + ')');
+      }
+    } else {
+      eye(116, 174); eye(184, 174);
+      stroke(tg, 'M134 192 Q150 208 166 192');
+    }
+  }
+  function blink() {
+    if (!eyes.length) { return; }
+    var j;
+    for (j = 0; j < eyes.length; j++) { eyes[j].e.setAttribute('ry', 1.6); eyes[j].g.setAttribute('r', 0); }
+    setTimeout(function () {
+      for (j = 0; j < eyes.length; j++) { eyes[j].e.setAttribute('ry', 11); eyes[j].g.setAttribute('r', 3.4); }
+    }, 140);
+  }
+  setInterval(blink, 4200);
+
+  /* ===== Settings ===== */
+  var S = { focus: 25, short: 5, long: 15, sound: true, auto: false };
+  var LIMITS = { focus: [5, 90, 5], short: [1, 30, 1], long: [5, 60, 5] };   /* min, max, step */
+  try {
+    var raw = window.localStorage.getItem('pomoSettings');
+    if (raw) {
+      var o = JSON.parse(raw);
+      for (k in LIMITS) {
+        if (LIMITS.hasOwnProperty(k) && typeof o[k] === 'number' && o[k] >= LIMITS[k][0] && o[k] <= LIMITS[k][1]) { S[k] = o[k]; }
+      }
+      if (typeof o.sound === 'boolean') { S.sound = o.sound; }
+      if (typeof o.auto === 'boolean') { S.auto = o.auto; }
+    }
+  } catch (e) {}
+  function saveSettings() {
+    try { window.localStorage.setItem('pomoSettings', JSON.stringify(S)); } catch (e) {}
+  }
+  function dur(m) { return S[m] * 60000; }
+
+  /* Light / dark mode (remembered) */
+  var dark = false;
+  try { dark = (window.localStorage.getItem('pomoDark') === '1'); } catch (e) {}
+  function setDark(v) {
+    dark = v;
+    try { window.localStorage.setItem('pomoDark', v ? '1' : '0'); } catch (e) {}
+    tomatoKey = '';
+    showToggles();
+    render();
+  }
+
+  /* ===== State ===== */
+  var mode = 'focus';
+  var running = false;
+  var endTime = 0;
+  var remaining = dur('focus');
+  var cycle = 0;
+  var today = 0;
+  function dayKey() { var d = new Date(); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+  var todayKey = dayKey();
+  try {
+    var tr = window.localStorage.getItem('pomoToday');
+    if (tr) {
+      var parts = tr.split(':');
+      if (parts[0] === todayKey) { today = parseInt(parts[1], 10) || 0; }
+    }
+  } catch (e) {}
+  function saveToday() {
+    try { window.localStorage.setItem('pomoToday', todayKey + ':' + today); } catch (e) {}
+  }
+
+  /* ===== Sound (Web Audio; iOS needs a tap first, so START unlocks it) ===== */
+  var ac = null;
+  function unlockAudio() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { return; }
+      if (!ac) { ac = new AC(); }
+      if (ac.state === 'suspended' && ac.resume) { ac.resume(); }
+      var b = ac.createBuffer(1, 1, 22050);
+      var s = ac.createBufferSource();
+      s.buffer = b;
+      s.connect(ac.destination);
+      if (s.start) { s.start(0); } else { s.noteOn(0); }
+    } catch (e) {}
+  }
+  function chime() {
+    if (!S.sound || !ac) { return; }
+    try {
+      var notes = [880, 1109, 1319, 1109, 1319, 1760];
+      for (var n = 0; n < notes.length; n++) {
+        var t = ac.currentTime + n * 0.22;
+        var osc = ac.createOscillator();
+        var gain = ac.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = notes[n];
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.35, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        if (osc.start) { osc.start(t); osc.stop(t + 0.55); } else { osc.noteOn(t); osc.noteOff(t + 0.55); }
+      }
+    } catch (e) {}
+  }
+  function flash() {
+    var f = $('flash');
+    f.className = '';
+    void f.offsetWidth;
+    f.className = 'go';
+    setTimeout(function () { f.className = ''; }, 3200);
+  }
+
+  /* ===== Display ===== */
+  var NAMES = { focus: 'Focus', short: 'Short break', long: 'Long break' };
+  var dotEls = $('dots').getElementsByTagName('div');
+  var tabEls = $('tabs').getElementsByTagName('button');
+
+  function render() {
+    var total = dur(mode);
+    var rem = running ? Math.max(0, endTime - Date.now()) : remaining;
+    var secs = Math.ceil(rem / 1000);
+    var mm = pad(Math.floor(secs / 60)), ss = pad(secs % 60);
+    $('m1').textContent = mm.charAt(0);
+    $('m2').textContent = mm.charAt(1);
+    $('s1').textContent = ss.charAt(0);
+    $('s2').textContent = ss.charAt(1);
+    prog.style.strokeDashoffset = (C * (1 - rem / total)).toFixed(2);
+    document.title = mm + ':' + ss + ' · ' + NAMES[mode];
+
+    var started = remaining < total;
+    $('bStart').textContent = running ? 'Pause' : (started ? 'Resume' : 'Start');
+    document.body.className = mode + (dark ? ' dark' : '');
+    document.documentElement.className = dark ? 'dark' : '';
+
+    var msg;
+    if (mode === 'focus') { msg = running ? 'You’ve got this!' : (started ? 'Paused' : 'Ready when you are'); }
+    else if (mode === 'short') { msg = 'Stretch and sip some water'; }
+    else { msg = 'Nice work. Take a real break.'; }
+    $('msg').textContent = msg;
+
+    for (var t = 0; t < tabEls.length; t++) {
+      tabEls[t].className = 'tab' + (tabEls[t].getAttribute('data-m') === mode ? ' on' : '');
+    }
+    var inCycle = cycle % 4;
+    var done = (mode === 'long') ? 4 : inCycle;
+    for (var d = 0; d < dotEls.length; d++) {
+      var cls = 'dot';
+      if (d < done) { cls += ' done'; }
+      else if (d === done && mode === 'focus') { cls += ' cur'; }
+      dotEls[d].className = cls;
+    }
+    $('today').innerHTML = 'Today: <b>' + today + '</b> ' + (today === 1 ? 'tomato' : 'tomatoes');
+
+    var tk = (mode === 'focus') ? (running ? 'focus' : 'idle') : 'break';
+    if (tk !== tomatoKey) { tomatoKey = tk; drawTomato(tk); }
+  }
+
+  /* ===== Timer logic ===== */
+  function goMode(m, autoStart) {
+    mode = m;
+    remaining = dur(m);
+    running = false;
+    if (autoStart) { endTime = Date.now() + remaining; running = true; }
+    render();
+  }
+  function complete() {
+    running = false;
+    chime();
+    flash();
+    if (mode === 'focus') {
+      if (dayKey() !== todayKey) { todayKey = dayKey(); today = 0; }
+      today++;
+      saveToday();
+      cycle++;
+      goMode((cycle % 4 === 0) ? 'long' : 'short', S.auto);
+    } else {
+      goMode('focus', S.auto);
+    }
+  }
+  function toggle() {
+    unlockAudio();
+    if (running) {
+      remaining = Math.max(0, endTime - Date.now());
+      running = false;
+    } else {
+      if (remaining <= 0) { remaining = dur(mode); }
+      endTime = Date.now() + remaining;
+      running = true;
+    }
+    render();
+  }
+  function reset() { running = false; remaining = dur(mode); render(); }
+  function skip() { goMode(mode === 'focus' ? 'short' : 'focus', false); }
+
+  $('bStart').addEventListener('click', toggle, false);
+  $('bReset').addEventListener('click', reset, false);
+  $('bSkip').addEventListener('click', skip, false);
+  function bindTab(btn) {
+    btn.addEventListener('click', function () { goMode(btn.getAttribute('data-m'), false); }, false);
+  }
+  for (i = 0; i < tabEls.length; i++) { bindTab(tabEls[i]); }
+
+  /* Settings sheet */
+  $('bSet').addEventListener('click', function () { $('sheetBg').className = 'open'; }, false);
+  $('bDone').addEventListener('click', function () { $('sheetBg').className = ''; }, false);
+  var stepBtns = $('sheet').getElementsByTagName('button');
+  function adjust(key, dir) {
+    var lim = LIMITS[key];
+    var v = S[key] + dir * lim[2];
+    if (v < lim[0]) { v = lim[0]; }
+    if (v > lim[1]) { v = lim[1]; }
+    var untouched = (!running && remaining === dur(key) && mode === key);
+    S[key] = v;
+    $('v_' + key).textContent = v + ' min';
+    saveSettings();
+    if (untouched) { remaining = dur(key); }
+    render();
+  }
+  function bindStep(btn) {
+    btn.addEventListener('click', function () {
+      adjust(btn.getAttribute('data-k'), parseInt(btn.getAttribute('data-d'), 10));
+    }, false);
+  }
+  for (i = 0; i < stepBtns.length; i++) {
+    if (stepBtns[i].getAttribute('data-k')) { bindStep(stepBtns[i]); }
+  }
+  function showToggles() {
+    $('tSound').className = 'sw' + (S.sound ? ' on' : '');
+    $('tAuto').className = 'sw' + (S.auto ? ' on' : '');
+    $('tDark').className = 'sw' + (dark ? ' on' : '');
+  }
+  $('tDark').addEventListener('click', function () { setDark(!dark); }, false);
+  $('bMode').addEventListener('click', function () { setDark(!dark); }, false);
+  $('tSound').addEventListener('click', function () { S.sound = !S.sound; saveSettings(); showToggles(); if (S.sound) { unlockAudio(); chime(); } }, false);
+  $('tAuto').addEventListener('click', function () { S.auto = !S.auto; saveSettings(); showToggles(); }, false);
+
+  function tick() {
+    if (running && endTime - Date.now() <= 0) { complete(); return; }
+    render();
+  }
+
+  $('v_focus').textContent = S.focus + ' min';
+  $('v_short').textContent = S.short + ' min';
+  $('v_long').textContent = S.long + ' min';
+  showToggles();
+  render();
+  setInterval(tick, 250);
+})();
+</script>
+</body>
+</html>
